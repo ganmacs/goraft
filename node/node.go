@@ -74,8 +74,7 @@ func Start(addr string, others []string) {
 	}
 	go nd.startServer()
 
-	r := time.Duration(rand.Intn(1)) * time.Second
-	// split start time
+	r := time.Duration(rand.Intn(1000)) * time.Millisecond
 	time.Sleep(r)
 
 	nd.startElection()
