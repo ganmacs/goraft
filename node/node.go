@@ -21,7 +21,7 @@ type node struct {
 
 func (n *node) RequestVote(ctx context.Context, req *rp.VoteRequest) (*rp.VoteResult, error) {
 	log.Printf("[%s] Recieve RequestVote from --", n.addr)
-	return &rp.VoteResult{req.Term, false}, nil
+	return &rp.VoteResult{req.Term, n.state.allowAsLeader(req.Term)}, nil
 }
 
 func (n *node) startServer() {
@@ -57,9 +57,10 @@ func (n *node) tryAsLeader() bool {
 			}
 			defer conn.Close()
 			cli := rp.NewLeaderElectionClient(conn)
-			log.Printf("[%s] send request to %s", n.addr, peer)
+			log.Printf("[%s] Send request to %s", n.addr, peer)
 
 			// FIX: CandidateId is invalid
+			// FIX: Set timeout
 			r, err := cli.RequestVote(context.Background(), &rp.VoteRequest{Term: term, CandidateId: 0})
 			if err != nil {
 				log.Fatalf("could not request vote: %v", err)
@@ -68,9 +69,11 @@ func (n *node) tryAsLeader() bool {
 			}
 
 			if r.VoteGranted {
+				log.Printf("[%s] Vote request is accepted from %s", n.addr, peer)
 				c <- true
+			} else {
+				log.Printf("[%s] Vote request is rejected from %s", n.addr, peer)
 			}
-
 		}(addr, ch)
 	}
 
@@ -84,38 +87,28 @@ func (n *node) tryAsLeader() bool {
 	return nodeCount/2 < accepteCount
 }
 
-func (n *node) startElection() {
-	n.state.asCandidate()
-
-	if n.tryAsLeader() {
-		n.asLeader()
-	} else {
+func (nd *node) startElection() {
+	if nd.tryAsLeader() {
+		log.Printf("[%s] Become Leader", nd.addr)
+		nd.state.asLeader()
 	}
 }
 
-func (n *node) asLeader() {
-	// send heartbeat
-}
-
-func (n *node) asFollower() {
-	log.Printf("[%s] as Follower\n", n.addr)
-	n.state.asFollower()
-
-	t := time.NewTicker(time.Duration(rand.Intn(3000)) * time.Millisecond)
+func (nd *node) start() {
+	t := time.NewTicker(time.Duration(rand.Intn(4000)) * time.Millisecond)
 
 	for {
-
-		log.Printf("[%s] Waiting heartbeat", n.addr)
 		select {
 		case <-t.C:
-			goto START_ELECTION // break
-		case addr := <-n.heartbeatCh:
-			log.Printf("[%s] heatbeat recieved from %s", n.addr, addr)
+			if nd.state.isFollower() {
+			} else if nd.state.isCandidate() {
+				go nd.startElection()
+			} else if nd.state.isLeader() {
+			}
+		case addr := <-nd.heartbeatCh:
+			log.Printf("[%s] heatbeat recieved from %s", nd.addr, addr)
 		}
 	}
-
-START_ELECTION:
-	n.startElection()
 }
 
 func Start(addr string, others []string) {
@@ -127,6 +120,9 @@ func Start(addr string, others []string) {
 	}
 
 	go nd.startServer()
-	// everyone is follower at first
-	nd.asFollower()
+
+	// everyone is candidate at first
+	log.Printf("[%s] Become Candidate", nd.addr)
+	nd.state.asCandidate()
+	nd.start()
 }

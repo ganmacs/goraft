@@ -20,8 +20,20 @@ type state struct {
 	lastVoteTerm uint64
 }
 
-func (s *state) allowRequestAsLeader(requestTerm uint64) bool {
-	return false
+func (s *state) allowAsLeader(t uint64) bool {
+	// MUTEX
+	if s.term < t {
+		s.lastVoteTerm = t
+		return true
+	} else if s.term > t {
+		return false
+	}
+
+	if s.lastVoteTerm == s.term {
+		return false
+	}
+	s.lastVoteTerm = s.term
+	return true
 }
 
 func (s *state) getTerm() uint64 {
@@ -49,13 +61,13 @@ func (n *state) isLeader() bool {
 
 // TODO: use CAS
 func (n *state) asFollower() {
-	atomic.AddUint64(&n.term, 1)
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.stateType = followerType
 }
 
 func (n *state) asCandidate() {
+	atomic.AddUint64(&n.term, 1)
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.stateType = candidateType
