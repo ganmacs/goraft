@@ -4,7 +4,6 @@ import (
 	"log"
 	"math/rand"
 	"net"
-	"sync/atomic"
 	"time"
 
 	rp "github.com/ganmacs/protoraft/proto"
@@ -16,12 +15,12 @@ import (
 type node struct {
 	addr        string
 	others      []string
-	term        uint64
 	state       state
 	heartbeatCh chan string
 }
 
 func (n *node) RequestVote(ctx context.Context, req *rp.VoteRequest) (*rp.VoteResult, error) {
+	log.Printf("[%s] Recieve RequestVote from --", n.addr)
 	return &rp.VoteResult{req.Term, false}, nil
 }
 
@@ -42,11 +41,8 @@ func (n *node) startServer() {
 	}
 }
 
-func (n *node) incTerm() uint64 {
-	return atomic.AddUint64(&n.term, 1)
-}
-
-func (n *node) tryAsLeader(term uint64) bool {
+func (n *node) tryAsLeader() bool {
+	term := n.state.getTerm()
 	ch := make(chan bool)
 
 	// TODO: actual node count sent message is different from n.others
@@ -90,9 +86,8 @@ func (n *node) tryAsLeader(term uint64) bool {
 
 func (n *node) startElection() {
 	n.state.asCandidate()
-	term := n.incTerm()
 
-	if n.tryAsLeader(term) {
+	if n.tryAsLeader() {
 		n.asLeader()
 	} else {
 	}
@@ -127,7 +122,6 @@ func Start(addr string, others []string) {
 	nd := &node{
 		addr,
 		others,
-		0,
 		state{},
 		make(chan string),
 	}

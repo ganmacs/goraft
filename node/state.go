@@ -2,6 +2,7 @@ package node
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
 type stateType uint8
@@ -13,8 +14,19 @@ const (
 )
 
 type state struct {
-	stateType stateType
-	mutex     sync.RWMutex
+	stateType    stateType
+	mutex        sync.RWMutex
+	term         uint64
+	lastVoteTerm uint64
+}
+
+func (s *state) allowRequestAsLeader(requestTerm uint64) bool {
+	return false
+}
+
+func (s *state) getTerm() uint64 {
+	// MUTEX
+	return s.term
 }
 
 func (n *state) isFollower() bool {
@@ -37,6 +49,7 @@ func (n *state) isLeader() bool {
 
 // TODO: use CAS
 func (n *state) asFollower() {
+	atomic.AddUint64(&n.term, 1)
 	n.mutex.Lock()
 	defer n.mutex.Unlock()
 	n.stateType = followerType
