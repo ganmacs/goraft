@@ -4,6 +4,7 @@ package rproto;
 
 service LeaderElection {
   rpc RequestVote (VoteRequest) returns (VoteResult) {}
+  rpc AppendEntry (AppendEntryRequest) returns (AppendEntryResult) {}
 }
 
 message VoteRequest {
@@ -14,4 +15,13 @@ message VoteRequest {
 message VoteResult {
   uint64 term = 1;
   bool vote_granted = 2;
+}
+
+message AppendEntryRequest {
+  uint64 term = 1;
+}
+
+message AppendEntryResult {
+  uint64 term = 1;
+  bool success = 2;
 }
