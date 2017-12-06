@@ -8,9 +8,11 @@ func Start(addrs []string) {
 	ch := make(chan int)
 
 	for i := 0; i < len(addrs); i++ {
-		tmp := []string{}
-		copy(tmp, addrs[:i]) // to avoid override addr
-		go node.Start(addrs[i], append(tmp, addrs[i+1:]...))
+		var tmp []string
+		// to avoid override addr
+		tmp = append(tmp, addrs[:i]...)
+		tmp = append(tmp, addrs[i+1:]...)
+		go node.Start(addrs[i], tmp)
 	}
 
 	<-ch
