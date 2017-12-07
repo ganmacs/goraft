@@ -40,7 +40,7 @@ func (n *node) startServer() {
 	rp.RegisterLeaderElectionServer(s, n)
 	reflection.Register(s)
 
-	log.Printf("[%s] Start Listing", n.addr)
+	log.Printf("[%s] Start Listening", n.addr)
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
