@@ -56,7 +56,7 @@ func (n *node) tryAsLeader() bool {
 		go func(peer string, c chan bool) {
 			conn, err := grpc.Dial(peer, grpc.WithInsecure())
 			if err != nil {
-				log.Fatalln("fail to dial to %s :%v", peer, err)
+				log.Printf("fail to dial to %s :%v", peer, err)
 				c <- false
 				return
 			}
@@ -68,7 +68,7 @@ func (n *node) tryAsLeader() bool {
 			// FIX: Set timeout
 			r, err := cli.RequestVote(context.Background(), &rp.VoteRequest{Term: term, CandidateId: 0})
 			if err != nil {
-				log.Fatalf("could not request vote: %v", err)
+				log.Printf("could not request vote: %v", err)
 				c <- false
 				return
 			}
@@ -124,7 +124,7 @@ START:
 		go func(peer string, c chan bool) {
 			conn, err := grpc.Dial(peer, grpc.WithInsecure())
 			if err != nil {
-				log.Fatalln("fail to dial to %s :%v", peer, err)
+				log.Printf("fail to dial to %s :%v", peer, err)
 				c <- false
 				return
 			}
@@ -135,7 +135,7 @@ START:
 			// FIX: Set timeout
 			r, err := cli.AppendEntry(context.Background(), &rp.AppendEntryRequest{Term: term})
 			if err != nil {
-				log.Fatalf("could not request vote: %v", err)
+				log.Printf("could not request vote: %v", err)
 				c <- false
 				return
 			}
