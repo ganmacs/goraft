@@ -24,6 +24,11 @@ func (n *node) RequestVote(ctx context.Context, req *rp.VoteRequest) (*rp.VoteRe
 	return &rp.VoteResult{req.Term, n.state.allowAsLeader(req.Term)}, nil
 }
 
+func (n *node) AppendEntry(ctx context.Context, req *rp.AppendEntryRequest) (*rp.AppendEntryResult, error) {
+	log.Printf("[%s] AppendEntry RequestVote from --", n.addr)
+	return &rp.AppendEntryResult{req.Term, true}, nil
+}
+
 func (n *node) startServer() {
 	lis, err := net.Listen("tcp", n.addr)
 	if err != nil {
@@ -78,7 +83,7 @@ func (n *node) tryAsLeader() bool {
 	}
 
 	var accepteCount = 0
-	for i := 0; i < nodeCount; i++ {
+	for _ = range n.others {
 		if <-ch { // blocking
 			accepteCount++
 		}
@@ -91,22 +96,82 @@ func (nd *node) startElection() {
 	if nd.tryAsLeader() {
 		log.Printf("[%s] Become Leader", nd.addr)
 		nd.state.asLeader()
+	} else {
+		log.Printf("[%s] Become Follower", nd.addr)
+		nd.state.asFollower()
+	}
+}
+
+func (nd *node) waitHeartBeat() {
+	t := time.NewTicker(time.Duration(rand.Intn(5000)) * time.Millisecond)
+
+	for {
+		select {
+		case <-nd.heartbeatCh:
+			// nothing
+		case <-t.C:
+			log.Printf("[%s] Waiting heartbeat is timeout", nd.addr)
+		}
+	}
+}
+
+func (nd *node) sendHeartBeat() {
+	term := nd.state.getTerm()
+	ch := make(chan bool)
+
+START:
+	for _, addr := range nd.others {
+		go func(peer string, c chan bool) {
+			conn, err := grpc.Dial(peer, grpc.WithInsecure())
+			if err != nil {
+				log.Fatalln("fail to dial to %s :%v", peer, err)
+				c <- false
+				return
+			}
+			defer conn.Close()
+			cli := rp.NewLeaderElectionClient(conn)
+			log.Printf("[%s] Send request to %s", nd.addr, peer)
+
+			// FIX: Set timeout
+			r, err := cli.AppendEntry(context.Background(), &rp.AppendEntryRequest{Term: term})
+			if err != nil {
+				log.Fatalf("could not request vote: %v", err)
+				c <- false
+				return
+			}
+
+			if r.Success {
+				log.Printf("[%s] AppendEntry to %s is success", nd.addr, peer)
+			} else {
+				log.Printf("[%s] AppendEntry to %s is failure", nd.addr, peer)
+			}
+			c <- false
+		}(addr, ch)
+	}
+
+	// block
+	for _ = range nd.others {
+		<-ch
+	}
+
+	if nd.state.isLeader() {
+		time.Sleep(2 * time.Second)
+		goto START
 	}
 }
 
 func (nd *node) start() {
-	t := time.NewTicker(time.Duration(rand.Intn(4000)) * time.Millisecond)
+	// To split start timing
+	s := time.Duration(rand.Intn(1000)) * time.Millisecond
+	time.Sleep(s)
 
 	for {
-		select {
-		case <-t.C:
-			if nd.state.isFollower() {
-			} else if nd.state.isCandidate() {
-				go nd.startElection()
-			} else if nd.state.isLeader() {
-			}
-		case addr := <-nd.heartbeatCh:
-			log.Printf("[%s] heatbeat recieved from %s", nd.addr, addr)
+		if nd.state.isFollower() {
+			nd.waitHeartBeat()
+		} else if nd.state.isCandidate() {
+			nd.startElection()
+		} else if nd.state.isLeader() {
+			nd.sendHeartBeat()
 		}
 	}
 }
