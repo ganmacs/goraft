@@ -78,6 +78,7 @@ func (n *node) tryAsLeader() bool {
 				c <- true
 			} else {
 				log.Printf("[%s] Vote request is rejected from %s", n.addr, peer)
+				c <- false
 			}
 		}(addr, ch)
 	}
