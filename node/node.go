@@ -20,12 +20,14 @@ type node struct {
 }
 
 func (n *node) RequestVote(ctx context.Context, req *rp.VoteRequest) (*rp.VoteResult, error) {
-	log.Printf("[%s] Recieve RequestVote from --", n.addr)
+	log.Printf("[%s] Term %v, Recieve RequestVote term=%v, accept=%v", n.addr, n.state.getTerm(), req.Term, n.state.allowAsLeader(req.Term))
 	return &rp.VoteResult{req.Term, n.state.allowAsLeader(req.Term)}, nil
 }
 
 func (n *node) AppendEntry(ctx context.Context, req *rp.AppendEntryRequest) (*rp.AppendEntryResult, error) {
-	log.Printf("[%s] AppendEntry RequestVote from --", n.addr)
+	log.Printf("[%s] Term %v, Recieve AppendEntry RequestVote in term=%v", n.addr, n.state.getTerm(), req.Term)
+	n.heartbeatCh <- "somthing"
+	// update term
 	return &rp.AppendEntryResult{req.Term, true}, nil
 }
 
@@ -104,17 +106,14 @@ func (nd *node) startElection() {
 }
 
 func (nd *node) waitHeartBeat() {
-	t := time.NewTicker(time.Duration(rand.Intn(5000)) * time.Millisecond)
+	t := time.NewTicker(5 * time.Second)
 
-	for {
-		select {
-		case <-nd.heartbeatCh:
-			// nothing
-		case <-t.C:
-			log.Printf("[%s] Waiting heartbeat is timeout", nd.addr)
-			nd.state.asCandidate()
-			return
-		}
+	select {
+	case <-nd.heartbeatCh:
+		log.Printf("[%s] Receive heartbeat", nd.addr)
+	case <-t.C:
+		log.Printf("[%s] Waiting heartbeat is timeout", nd.addr)
+		nd.state.asCandidate()
 	}
 }
 
@@ -122,7 +121,6 @@ func (nd *node) sendHeartBeat() {
 	term := nd.state.getTerm()
 	ch := make(chan bool)
 
-START:
 	for _, addr := range nd.others {
 		go func(peer string, c chan bool) {
 			conn, err := grpc.Dial(peer, grpc.WithInsecure())
@@ -156,19 +154,16 @@ START:
 	for _ = range nd.others {
 		<-ch
 	}
-
-	if nd.state.isLeader() {
-		time.Sleep(2 * time.Second)
-		goto START
-	}
 }
 
 func (nd *node) start() {
 	// To split start timing
-	s := time.Duration(rand.Intn(1000)) * time.Millisecond
+	s := time.Duration(rand.Intn(2000)) * time.Millisecond
 	time.Sleep(s)
 
 	for {
+		time.Sleep(time.Duration(1000) * time.Millisecond)
+
 		if nd.state.isFollower() {
 			nd.waitHeartBeat()
 		} else if nd.state.isCandidate() {
@@ -180,6 +175,7 @@ func (nd *node) start() {
 }
 
 func Start(addr string, others []string) {
+	rand.Seed(time.Now().UnixNano())
 	nd := &node{
 		addr,
 		others,

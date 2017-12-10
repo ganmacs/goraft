@@ -29,6 +29,10 @@ func (s *state) allowAsLeader(t uint64) bool {
 		return false
 	}
 
+	if s.isLeader() {
+		return false
+	}
+
 	if s.lastVoteTerm == s.term {
 		return false
 	}
