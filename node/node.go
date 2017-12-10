@@ -111,6 +111,8 @@ func (nd *node) waitHeartBeat() {
 			// nothing
 		case <-t.C:
 			log.Printf("[%s] Waiting heartbeat is timeout", nd.addr)
+			nd.state.asCandidate()
+			return
 		}
 	}
 }
